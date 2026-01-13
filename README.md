@@ -1,5 +1,5 @@
 # CB-LLAMBO: LLAMBO with Conformal Calibration and Bandit Budget Allocation
-**Project to extend and improve the robustness and efficiency of the surrogate modeling layer on LLAMBO**
+**Project to improve the robustness and efficiency of the surrogate modeling layer on LLAMBO**
 
 
 ## LLAMBO: Large Language Models to Enhance Bayesian Optimization

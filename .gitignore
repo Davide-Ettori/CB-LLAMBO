@@ -1,0 +1,13 @@
+# Python virtual environments
+venv/
+.env/
+.env*/
+.venv/
+lib/
+lib64/
+pyvenv.cfg
+llambo/share
+
+# Python cache
+__pycache__/
+*.pyc

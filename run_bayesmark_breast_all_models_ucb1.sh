@@ -8,7 +8,7 @@ else
     ENGINE="gpt-3.5-turbo"
 fi
 
-DATASET="breast"
+DATASET="diabetes"
 
 for model in "RandomForest" "SVM" "DecisionTree" "MLP_SGD" "AdaBoost"
 do

@@ -70,7 +70,7 @@ class LLM_DIS_SM:
         self._embedding_cache = {}
 
         assert isinstance(self.shuffle_features, bool), 'shuffle_features must be a boolean'
-        assert self.eval_mode in ["mc", "bandit_ucb1", "bandit_ucb1_tuned"], "Unsupported eval_mode"
+        assert self.eval_mode in ["mc", "bandit_ucb1", "bandit_ucb1_tuned", "bandit_ucb1_kl"], "Unsupported eval_mode"
 
 
     async def _async_generate(self, few_shot_template, query_example, query_idx):
@@ -381,8 +381,32 @@ class LLM_DIS_SM:
             v = 0.0 if var_est is None else var_est
             v = min(0.25, v + np.sqrt(2 * np.log(t) / count))
             return mean + np.sqrt((np.log(t) / count) * v)
+        if self.bandit_strategy == "ucb1_kl":
+            return self._kl_ucb(mean, count, t)
         else:
             raise ValueError(f"Unsupported bandit strategy: {self.bandit_strategy}")
+
+    def _kl_divergence(self, p, q):
+        eps = 1e-12
+        p = min(max(p, eps), 1 - eps)
+        q = min(max(q, eps), 1 - eps)
+        return p * np.log(p / q) + (1 - p) * np.log((1 - p) / (1 - q))
+
+    def _kl_ucb(self, mean, count, t):
+        if count == 0:
+            return 1.0
+        # KL-UCB for bounded rewards in [0,1]
+        c = 3.0
+        bound = (np.log(t) + c * np.log(max(1.0, np.log(t)))) / count
+        lo = mean
+        hi = 1.0
+        for _ in range(30):
+            mid = (lo + hi) / 2
+            if self._kl_divergence(mean, mid) > bound:
+                hi = mid
+            else:
+                lo = mid
+        return lo
 
     def _select_query_point_bandit(self, observed_configs, observed_fvals, candidate_configs):
         # initialize calibration on warmstart configs
@@ -397,8 +421,9 @@ class LLM_DIS_SM:
         budget = max(budget, n_arms)
 
         counts = np.zeros(n_arms, dtype=int)
-        sums = np.zeros(n_arms, dtype=float)
-        sumsq = np.zeros(n_arms, dtype=float)
+        sums_raw = np.zeros(n_arms, dtype=float)
+        sumsq_raw = np.zeros(n_arms, dtype=float)
+        sums_norm = np.zeros(n_arms, dtype=float)
         reasonings = [[] for _ in range(n_arms)]
 
         total_cost = cal_cost
@@ -406,6 +431,24 @@ class LLM_DIS_SM:
 
         def reward_from_score(score):
             return -score if self.lower_is_better else score
+
+        observed_vals = observed_fvals.iloc[:, 0].to_numpy()
+        obs_min = float(np.min(observed_vals))
+        obs_max = float(np.max(observed_vals))
+        obs_range = obs_max - obs_min
+
+        def normalize_score(score):
+            if obs_range <= 0:
+                return 0.5
+            if self.lower_is_better:
+                norm = 1.0 - ((score - obs_min) / obs_range)
+            else:
+                norm = (score - obs_min) / obs_range
+            if norm < 0.0:
+                return 0.0
+            if norm > 1.0:
+                return 1.0
+            return norm
 
         # initial pull each arm once
         pulls = 0
@@ -434,8 +477,10 @@ class LLM_DIS_SM:
                 print(f"\n\n\nUCB1 pull end: arm {i} (invalid score)\nResponse: {content}\n\n")
                 continue
             counts[i] += 1
-            sums[i] += reward_from_score(score)
-            sumsq[i] += reward_from_score(score) ** 2
+            raw_reward = reward_from_score(score)
+            sums_raw[i] += raw_reward
+            sumsq_raw[i] += raw_reward ** 2
+            sums_norm[i] += normalize_score(score)
             reasonings[i].append(reasoning)
             pulls += 1
 
@@ -445,12 +490,16 @@ class LLM_DIS_SM:
 
         t = max(1, pulls)
         while pulls < budget:
-            means = np.array([s / c if c > 0 else 0.0 for s, c in zip(sums, counts)])
-            variances = np.array([
-                (sumsq[i] / counts[i]) - (means[i] ** 2) if counts[i] > 0 else 0.0
+            means_raw = np.array([s / c if c > 0 else 0.0 for s, c in zip(sums_raw, counts)])
+            variances_raw = np.array([
+                (sumsq_raw[i] / counts[i]) - (means_raw[i] ** 2) if counts[i] > 0 else 0.0
                 for i in range(n_arms)
             ])
-            ucb_values = np.array([self._ucb_value(means[i], counts[i], t, variances[i]) for i in range(n_arms)])
+            if self.bandit_strategy == "ucb1_kl":
+                means_norm = np.array([s / c if c > 0 else 0.0 for s, c in zip(sums_norm, counts)])
+                ucb_values = np.array([self._ucb_value(means_norm[i], counts[i], t, None) for i in range(n_arms)])
+            else:
+                ucb_values = np.array([self._ucb_value(means_raw[i], counts[i], t, variances_raw[i]) for i in range(n_arms)])
             arm = int(np.argmax(ucb_values))
 
             prompt = build_bandit_prompt(
@@ -480,8 +529,10 @@ class LLM_DIS_SM:
                 t += 1
                 continue
             counts[arm] += 1
-            sums[arm] += reward_from_score(score)
-            sumsq[arm] += reward_from_score(score) ** 2
+            raw_reward = reward_from_score(score)
+            sums_raw[arm] += raw_reward
+            sumsq_raw[arm] += raw_reward ** 2
+            sums_norm[arm] += normalize_score(score)
             reasonings[arm].append(reasoning)
             pulls += 1
             t += 1
@@ -490,9 +541,9 @@ class LLM_DIS_SM:
         
         # compute mean predicted score per arm in original scale
         if self.lower_is_better:
-            mean_scores = np.array([-(s / c) if c > 0 else np.inf for s, c in zip(sums, counts)])
+            mean_scores = np.array([-(s / c) if c > 0 else np.inf for s, c in zip(sums_raw, counts)])
         else:
-            mean_scores = np.array([s / c if c > 0 else -np.inf for s, c in zip(sums, counts)])
+            mean_scores = np.array([s / c if c > 0 else -np.inf for s, c in zip(sums_raw, counts)])
 
         top_k = self.bandit_top_k if self.bandit_top_k is not None else min(3, n_arms)
         top_k = max(1, min(top_k, n_arms))

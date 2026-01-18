@@ -24,7 +24,7 @@ class LLAMBO:
                  use_input_warping=False,       # whether to use input warping
                  prompt_setting=None,    # ablation on prompt design, either 'full_context' or 'partial_context' or 'no_context'
                  shuffle_features=False,     # whether to shuffle features in prompt generation
-                 sm_eval_mode="mc",          # surrogate evaluation mode: mc | bandit_ucb1 | bandit_ucb1_tuned
+                 sm_eval_mode="mc",          # surrogate evaluation mode: mc | bandit_ucb1 | bandit_ucb1_tuned | bandit_ucb1_kl
                  bandit_budget_multiplier=5,
                  bandit_top_k=None,
                  conformal_quantile=0.9,
@@ -87,7 +87,12 @@ class LLAMBO:
                 prompt_setting=prompt_setting,
                 shuffle_features=shuffle_features,
                 eval_mode=sm_eval_mode,
-                bandit_strategy="ucb1" if sm_eval_mode == "bandit_ucb1" else "ucb1_tuned" if sm_eval_mode == "bandit_ucb1_tuned" else "ucb1",
+                bandit_strategy=(
+                    "ucb1" if sm_eval_mode == "bandit_ucb1"
+                    else "ucb1_tuned" if sm_eval_mode == "bandit_ucb1_tuned"
+                    else "ucb1_kl" if sm_eval_mode == "bandit_ucb1_kl"
+                    else "ucb1"
+                ),
                 bandit_budget_multiplier=bandit_budget_multiplier,
                 bandit_top_k=bandit_top_k,
                 conformal_quantile=conformal_quantile,

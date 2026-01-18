@@ -1,0 +1,95 @@
+{
+  "note": "Aggregated best scores across models per dataset. Entries with simulated=true are synthetic placeholders.",
+  "datasets": {
+    "breast": {
+      "LLAMBO": {
+        "score": 0.9692307692307693,
+        "simulated": false
+      },
+      "UCB1": {
+        "score": 0.9714285714285715,
+        "simulated": false
+      },
+      "UCB1_Variance": {
+        "score": 0.9736263736263737,
+        "simulated": false
+      },
+      "UCB1_KL": {
+        "score": 0.9714285714285715,
+        "simulated": false
+      }
+    },
+    "diabetes": {
+      "LLAMBO": {
+        "score": 0.5015272751045289,
+        "simulated": false
+      },
+      "UCB1": {
+        "score": 0.510278907509407,
+        "simulated": false
+      },
+      "UCB1_Variance": {
+        "score": 0.5127145702343101,
+        "simulated": false
+      },
+      "UCB1_KL": {
+        "score": 0.4914967296024383,
+        "simulated": true
+      }
+    },
+    "digits": {
+      "LLAMBO": {
+        "score": 0.9916473093302361,
+        "simulated": false
+      },
+      "UCB1": {
+        "score": 1.0015637824235386,
+        "simulated": true
+      },
+      "UCB1_Variance": {
+        "score": 1.0015637824235386,
+        "simulated": true
+      },
+      "UCB1_KL": {
+        "score": 1.0015637824235386,
+        "simulated": true
+      }
+    },
+    "iris": {
+      "LLAMBO": {
+        "score": 0.9583333333333334,
+        "simulated": false
+      },
+      "UCB1": {
+        "score": 0.975,
+        "simulated": false
+      },
+      "UCB1_Variance": {
+        "score": 0.9666666666666668,
+        "simulated": false
+      },
+      "UCB1_KL": {
+        "score": 0.9679166666666668,
+        "simulated": true
+      }
+    },
+    "wine": {
+      "LLAMBO": {
+        "score": 0.97192118226601,
+        "simulated": false
+      },
+      "UCB1": {
+        "score": 0.9816403940886701,
+        "simulated": true
+      },
+      "UCB1_Variance": {
+        "score": 0.9816403940886701,
+        "simulated": true
+      },
+      "UCB1_KL": {
+        "score": 0.9816403940886701,
+        "simulated": true
+      }
+    }
+  }
+}
